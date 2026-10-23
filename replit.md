@@ -1,6 +1,6 @@
-# [Project name]
+# BridgePlus Tech Storefront
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A responsive electronics storefront for browsing demo products and sending order requests to BridgePlus Tech over WhatsApp.
 
 ## Run & Operate
 
@@ -30,11 +30,17 @@ _Populate as you build — non-obvious choices a reader couldn't infer from the 
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Customers can browse a product catalogue, search and filter categories, manage a cart, and submit an order request through WhatsApp.
+
+- Treat catalogue entries and prices as demos until BridgePlus verifies them.
+- Do not invent stock, discounts, delivery fees, addresses, warranties, or payment methods.
+- A generated or copied WhatsApp message is not an order confirmation or proof of payment.
+- Payment methods and any delivery charge must be confirmed directly with BridgePlus.
+- Keep the WhatsApp contact configurable; the supplied number is +234 906 737 4934.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Keep the storefront clean and premium, with an Apple-inspired feel and a product-focused shopping layout.
 
 ## Gotchas
 
