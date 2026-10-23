@@ -1,8 +1,8 @@
 export const businessConfig = {
   businessName: 'BridgePlus Tech',
   tagline: 'Smart devices. Greater possibilities.',
-  whatsappNumber: import.meta.env.VITE_WHATSAPP_NUMBER || '2349067374934',
-  supportPhone: '+234 906 737 4934',
+  whatsappNumber: import.meta.env.VITE_WHATSAPP_NUMBER || '2349059325955',
+  supportPhone: '+234 905 932 5955',
   currency: 'NGN',
   locale: 'en-NG',
 } as const;

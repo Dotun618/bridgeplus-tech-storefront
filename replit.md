@@ -36,7 +36,7 @@ Customers can browse a product catalogue, search and filter categories, manage a
 - Do not invent stock, discounts, delivery fees, addresses, warranties, or payment methods.
 - A generated or copied WhatsApp message is not an order confirmation or proof of payment.
 - Payment methods and any delivery charge must be confirmed directly with BridgePlus.
-- Keep the WhatsApp contact configurable; the supplied number is +234 906 737 4934.
+- Keep the WhatsApp contact configurable; the supplied number is +234 905 932 5955.
 
 ## User preferences
 

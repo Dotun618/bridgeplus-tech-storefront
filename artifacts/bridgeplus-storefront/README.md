@@ -11,7 +11,7 @@ Delivery pricing is not configured as zero or free. The checkout presents the de
 ## Maintainer notes
 
 - **Verified catalogue and prices:** edit `src/storefront/products.ts`. Keep `price: null` and a clear “Price to be confirmed” state until the price is verified. Set `demo: false` and update the badge only when a listing is confirmed. Product prices use NGN.
-- **Business identity and contact:** edit `src/storefront/config.ts`. The configured WhatsApp destination defaults to `+2349067374934` (stored as digits). Optionally override it with `VITE_WHATSAPP_NUMBER`. The supplied business name and tagline are the only company claims used in the UI.
+- **Business identity and contact:** edit `src/storefront/config.ts`. The configured WhatsApp destination defaults to `+2349059325955` (stored as digits). Optionally override it with `VITE_WHATSAPP_NUMBER`. The supplied business name and tagline are the only company claims used in the UI.
 - **Brand assets:** the B+ wordmark in `src/storefront/Header.tsx` and `src/App.tsx` is the supplied implementation and current available mark. Update those two instances together if approved brand artwork becomes available.
 - **Category filters:** edit `categories` in `src/storefront/products.ts`. Categories without confirmed inventory may use a sample listing without a numeric price.
 
