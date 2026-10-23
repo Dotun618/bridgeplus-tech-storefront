@@ -4,7 +4,6 @@ import {
 } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import type { Product } from './products';
-import { categories, products } from './products';
 import { formatMoney } from './utils';
 
 const categoryIcons: Record<string, typeof Smartphone> = {
@@ -27,6 +26,9 @@ const productIcons: Record<Product['icon'], typeof Smartphone> = {
 
 function Illustration({ product }: { product: Product }) {
   const Icon = productIcons[product.icon];
+  if (product.imageUrl) {
+    return <img className="product-catalog-image" src={product.imageUrl} alt="" loading="lazy" />;
+  }
   return <span className="product-illustration" aria-hidden="true"><Icon size={48} strokeWidth={1.3} /></span>;
 }
 
@@ -51,14 +53,19 @@ function ProductCard({ product, onView, onAdd }: {
   </article>;
 }
 
-export function ProductCatalog({ search, setSearch, activeCategory, setActiveCategory, onAdd, onView }: {
+export function ProductCatalog({ search, setSearch, activeCategory, setActiveCategory, onAdd, onView, products, categories, loading, error }: {
   search: string;
   setSearch: (value: string) => void;
   activeCategory: string;
   setActiveCategory: (value: string) => void;
   onAdd: (product: Product) => void;
   onView: (product: Product) => void;
+  products: Product[];
+  categories: string[];
+  loading: boolean;
+  error: string;
 }) {
+  const categoryOptions = ['All products', ...categories];
   const query = search.trim().toLowerCase();
   const filtered = products.filter((product) =>
     (activeCategory === 'All products' || product.category === activeCategory) &&
@@ -72,15 +79,15 @@ export function ProductCatalog({ search, setSearch, activeCategory, setActiveCat
         <a className="arrow-link" href="#shop">Browse all items <ArrowRight size={16} /></a>
       </div>
       <div className="category-grid">
-        {categories.filter((item) => item !== 'All products').map((category) => {
-          const Icon = categoryIcons[category];
+          {categories.map((category) => {
+          const Icon = categoryIcons[category] ?? Smartphone;
           const count = products.filter((product) => product.category === category).length;
           return <button type="button" key={category} className={`category-card ${activeCategory === category ? 'category-selected' : ''}`} aria-pressed={activeCategory === category} onClick={() => {
             setActiveCategory(category); setSearch(''); document.getElementById('shop')?.scrollIntoView({ behavior: 'smooth' });
           }}>
             <span className="category-icon"><Icon size={25} strokeWidth={1.6} /></span>
             <span className="category-card-title">{category}</span>
-            <span className="category-card-bottom"><span>{count ? `${count} demo ${count === 1 ? 'listing' : 'listings'}` : 'Sample request'}</span><ArrowDownRight size={17} /></span>
+             <span className="category-card-bottom"><span>{count ? `${count} ${count === 1 ? 'listing' : 'listings'}` : 'No listings yet'}</span><ArrowDownRight size={17} /></span>
           </button>;
         })}
       </div>
@@ -93,17 +100,26 @@ export function ProductCatalog({ search, setSearch, activeCategory, setActiveCat
       </div>
       <div className="filter-row">
         <div className="filter-pills" aria-label="Filter catalogue by category">
-          {categories.map((category) => <button type="button" key={category} className={`filter-pill ${activeCategory === category ? 'active' : ''}`} aria-pressed={activeCategory === category} onClick={() => setActiveCategory(category)}>{category}</button>)}
+          {categoryOptions.map((category) => <button type="button" key={category} className={`filter-pill ${activeCategory === category ? 'active' : ''}`} aria-pressed={activeCategory === category} onClick={() => setActiveCategory(category)}>{category}</button>)}
         </div>
         <span className="results-count" aria-live="polite">{filtered.length} {filtered.length === 1 ? 'listing' : 'listings'}</span>
       </div>
-      {filtered.length ? <div className="product-grid">{filtered.map((product) => <ProductCard key={product.id} product={product} onAdd={onAdd} onView={onView} />)}</div> : <div className="no-results">
+      {loading ? <div className="catalog-message" role="status"><span className="catalog-spinner" />Loading the live catalogue…</div>
+        : error ? <div className="catalog-message catalog-message-error" role="alert"><CircleHelp size={24} /><h3>Catalogue unavailable</h3><p>{error}</p><p>Product listings are not shown until the catalogue connection is available.</p></div>
+          : filtered.length ? <div className="product-grid">{filtered.map((product) => <ProductCard key={product.id} product={product} onAdd={onAdd} onView={onView} />)}</div>
+            : products.length === 0 ? <div className="no-results">
+              <ShoppingBagIcon /><h3>No products published yet</h3><p>BridgePlus will add products to the catalogue when they are ready to share.</p>
+            </div> : <div className="no-results">
         <Search size={27} aria-hidden="true" /><h3>No matching listings</h3><p>Try another search or reset your category filter.</p>
         <button type="button" className="secondary-button" onClick={() => { setSearch(''); setActiveCategory('All products'); }}>Clear filters</button>
       </div>}
-      <p className="catalog-disclaimer"><CircleHelp size={13} /> Every supplied catalogue entry and price is unverified demo data. Placeholder listings show no price; confirm inventory and all prices with BridgePlus before ordering.</p>
+      {!loading && !error && products.some((product) => product.demo) && <p className="catalog-disclaimer"><CircleHelp size={13} /> Demo listings are examples, not verified stock or pricing. Confirm product model, availability and all prices with BridgePlus before ordering.</p>}
     </section>
   </>;
+}
+
+function ShoppingBagIcon() {
+  return <span className="empty-catalog-mark" aria-hidden="true"><ShoppingBag size={27} /></span>;
 }
 
 export function ProductModal({ product, onClose, onAdd }: {
