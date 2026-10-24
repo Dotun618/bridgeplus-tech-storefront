@@ -78,6 +78,7 @@ async function getSignedImageUrl(path: string) {
     .from(IMAGE_BUCKET)
     .createSignedUrl(path, 86_400);
   throwIfError(error);
+  if (!data) throw new Error('A product image URL could not be created.');
   return data.signedUrl;
 }
 
@@ -281,6 +282,7 @@ export async function saveProduct(draft: ProductDraft, images: ImageDraft[], pro
   } else {
     const { data, error } = await client.from('products').insert(productValues).select('id').single();
     throwIfError(error);
+    if (!data) throw new Error('The product record was not returned after saving.');
     id = data.id as string;
   }
 
@@ -294,7 +296,12 @@ export async function saveProduct(draft: ProductDraft, images: ImageDraft[], pro
   const uploadedPaths: string[] = [];
 
   try {
+    if (existing.length) {
+      const { error } = await client.from('product_images').update({ is_primary: false }).eq('product_id', id);
+      throwIfError(error);
+    }
     const savedExistingIds: string[] = [];
+    const defaultPrimaryIndex = images.length && !images.some((image) => image.isPrimary) ? 0 : -1;
     const newRows: Array<{
       product_id: string;
       storage_path: string;
@@ -307,7 +314,7 @@ export async function saveProduct(draft: ProductDraft, images: ImageDraft[], pro
       const imageValues = {
         alt_text: image.alt.trim() || draft.name.trim(),
         sort_order: index,
-        is_primary: image.isPrimary || (images.length === 1 && index === 0),
+        is_primary: image.isPrimary || index === defaultPrimaryIndex,
       };
       if (image.file) {
         const extension = image.file.name.split('.').pop()?.toLowerCase() || 'jpg';
@@ -348,6 +355,7 @@ export async function saveProduct(draft: ProductDraft, images: ImageDraft[], pro
     }
     throw error;
   }
+  return id!;
 }
 
 export async function deleteProduct(productId: string) {
@@ -383,6 +391,10 @@ export async function saveCategory(draft: CategoryDraft, categoryId?: string) {
 }
 
 export async function deactivateCategory(categoryId: string) {
-  const { error } = await requireSupabase().from('categories').update({ active: false }).eq('id', categoryId);
+  await setCategoryActive(categoryId, false);
+}
+
+export async function setCategoryActive(categoryId: string, active: boolean) {
+  const { error } = await requireSupabase().from('categories').update({ active }).eq('id', categoryId);
   throwIfError(error);
 }

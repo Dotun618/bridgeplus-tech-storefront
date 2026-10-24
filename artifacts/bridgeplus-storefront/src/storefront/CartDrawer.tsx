@@ -16,7 +16,8 @@ type CartDrawerProps = {
 export function CartDrawer({ open, cart, subtotal, onClose, onChangeQuantity, onRemove, onCheckout }: CartDrawerProps) {
   if (!open) return null;
   const count = cart.reduce((sum, row) => sum + row.quantity, 0);
-  const unpricedCount = cart.filter(({ product }) => product.price === null).length;
+  const unpricedCount = cart.reduce((sum, { product, quantity }) => sum + (product.price === null ? quantity : 0), 0);
+  const hasDemoPrice = cart.some(({ product }) => product.demo && product.price !== null);
   const backdropClose = (event: MouseEvent<HTMLDivElement>) => { if (event.target === event.currentTarget) onClose(); };
   return <div className="drawer-backdrop" role="presentation" onMouseDown={backdropClose}>
     <aside className="cart-drawer" role="dialog" aria-modal="true" aria-labelledby="cart-title">
@@ -31,10 +32,10 @@ export function CartDrawer({ open, cart, subtotal, onClose, onChangeQuantity, on
       </div> : <>
         <div className="cart-items">
           {cart.map(({ product, quantity }) => <div className="cart-item" key={product.id}>
-            <div className="cart-item-image" aria-hidden="true"><ShoppingBag size={25} strokeWidth={1.4} /></div>
+            <div className="cart-item-image" aria-hidden="true">{product.imageUrl ? <img src={product.imageUrl} alt="" /> : <ShoppingBag size={25} strokeWidth={1.4} />}</div>
             <div className="cart-item-copy">
               <p className="product-brand">{product.brand}</p><h3>{product.name}</h3>
-              <strong>{product.price === null ? 'Price to be confirmed' : `${formatMoney(product.price)} each (demo)`}</strong>
+              <strong>{product.price === null ? 'Price to be confirmed' : `${formatMoney(product.price)} each${product.demo ? ' (demo price)' : ''}`}</strong>
               <div className="quantity-control" aria-label={`Quantity for ${product.name}`}>
                 <button type="button" aria-label={`Decrease ${product.name} quantity`} onClick={() => onChangeQuantity(product.id, quantity - 1)}><Minus size={13} /></button>
                 <span aria-live="polite">{quantity}</span>
@@ -47,7 +48,7 @@ export function CartDrawer({ open, cart, subtotal, onClose, onChangeQuantity, on
         <div className="cart-summary">
           <div className="summary-row"><span>Known-price subtotal</span><strong>{formatMoney(subtotal)}</strong></div>
           <div className="summary-row provisional-row"><span>Provisional total, priced items only</span><strong>{formatMoney(subtotal)}</strong></div>
-          <p className="muted-small">Demo prices only. {unpricedCount > 0 ? `${unpricedCount} unpriced listing(s) are excluded. ` : ''}Delivery fee is unconfirmed; any delivery total is provisional.</p>
+          <p className="muted-small">{hasDemoPrice ? 'Demo prices are unverified. ' : 'Displayed prices still need BridgePlus confirmation. '}{unpricedCount > 0 ? `${unpricedCount} unpriced item(s) are excluded. ` : ''}Delivery fee is unconfirmed; any delivery total is provisional.</p>
           <button type="button" className="primary-button full-button" onClick={onCheckout}>Continue to checkout <ArrowRight size={17} /></button>
           <button type="button" className="text-button full-button" onClick={onClose}>Continue browsing</button>
         </div>

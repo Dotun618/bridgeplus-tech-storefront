@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import {
   AlertCircle, Archive, Camera, Check, ChevronDown, CirclePlus, ImagePlus, LogOut, PackageOpen,
   Pencil, RefreshCw, Search, ShieldCheck, Smartphone, Star, Trash2, Upload, X,
@@ -33,9 +33,10 @@ function numberOrNull(value: string) {
 }
 
 export function AdminPanel(props: AdminPanelProps) {
-  const { currentUserEmail, products, categories, loading, error, notice, onRefresh, onSignOut, onSaveProduct, onDeleteProduct, onSaveCategory, onDeactivateCategory } = props;
+  const { currentUserEmail, products, categories, loading, error, notice, onRefresh, onSignOut, onSaveProduct, onDeleteProduct, onSaveCategory, onSetCategoryActive } = props;
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(products[0]?.id ?? null);
   const [draft, setDraft] = useState<ProductDraft>(() => products[0] ? draftFromProduct(products[0]) : blankDraft(categories[0]?.id ?? ''));
   const [images, setImages] = useState<ImageDraft[]>([]);
@@ -46,19 +47,32 @@ export function AdminPanel(props: AdminPanelProps) {
   const [categoryDraft, setCategoryDraft] = useState<CategoryDraft>({ name: '', slug: '', sortOrder: categories.length });
   const [categoryId, setCategoryId] = useState<string | undefined>();
   const [deletePhrase, setDeletePhrase] = useState('');
+  const localImageUrls = useRef(new Set<string>());
 
   const selected = products.find((product) => product.id === selectedId) ?? null;
   const sortedProducts = useMemo(() => [...products].sort((a, b) => a.name.localeCompare(b.name)), [products]);
   const filteredProducts = useMemo(() => sortedProducts.filter((product) => {
     const phrase = search.toLowerCase().trim();
     const matchesSearch = !phrase || [product.name, product.brand, product.sku, product.category].some((value) => value.toLowerCase().includes(phrase));
-    const matchesFilter = filter === 'all' || (filter === 'active' && product.active) || (filter === 'inactive' && !product.active) || (filter === 'featured' && product.featured);
-    return matchesSearch && matchesFilter;
-  }), [sortedProducts, search, filter]);
-  const activeCount = products.filter((product) => product.active).length;
+    const isPublic = product.active && Boolean(categories.find((category) => category.id === product.categoryId)?.active);
+    const matchesFilter = filter === 'all' || (filter === 'active' && isPublic) || (filter === 'inactive' && !isPublic) || (filter === 'featured' && product.featured);
+    const matchesCategory = categoryFilter === 'all' || product.categoryId === categoryFilter;
+    return matchesSearch && matchesFilter && matchesCategory;
+  }), [sortedProducts, search, filter, categoryFilter, categories]);
+  const activeCount = products.filter((product) => product.active && Boolean(categories.find((category) => category.id === product.categoryId)?.active)).length;
+  const inactiveCount = products.length - activeCount;
   const featuredCount = products.filter((product) => product.featured).length;
 
+  useEffect(() => () => {
+    for (const url of localImageUrls.current) URL.revokeObjectURL(url);
+  }, []);
+
+  function clearLocalImagePreviews() {
+    for (const url of localImageUrls.current) URL.revokeObjectURL(url);
+    localImageUrls.current.clear();
+  }
   function chooseProduct(product: CatalogProduct) {
+    clearLocalImagePreviews();
     setSelectedId(product.id);
     setDraft(draftFromProduct(product));
     setImages(product.images.map((image) => ({ ...image })));
@@ -66,6 +80,7 @@ export function AdminPanel(props: AdminPanelProps) {
     setFeedback('');
   }
   function createProduct() {
+    clearLocalImagePreviews();
     const defaultCategory = categories.find((category) => category.active) ?? categories[0];
     setSelectedId(null);
     setDraft(blankDraft(defaultCategory?.id ?? ''));
@@ -83,10 +98,14 @@ export function AdminPanel(props: AdminPanelProps) {
     const files = Array.from(event.target.files ?? []);
     if (!files.length) return;
     setImages((old) => {
-      const additions = files.map((file, index): ImageDraft => ({
-        file, url: URL.createObjectURL(file), alt: draft.name ? `${draft.name} product image` : file.name,
-        sortOrder: old.length + index, isPrimary: old.length === 0 && index === 0,
-      }));
+      const additions = files.map((file, index): ImageDraft => {
+        const url = URL.createObjectURL(file);
+        localImageUrls.current.add(url);
+        return {
+          file, url, alt: draft.name ? `${draft.name} product image` : file.name,
+          sortOrder: old.length + index, isPrimary: old.length === 0 && index === 0,
+        };
+      });
       return [...old, ...additions];
     });
     event.target.value = '';
@@ -94,11 +113,22 @@ export function AdminPanel(props: AdminPanelProps) {
   function replaceImage(index: number, event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    updateImage(index, { file, url: URL.createObjectURL(file) });
+    const oldImage = images[index];
+    if (oldImage?.file && localImageUrls.current.has(oldImage.url)) {
+      URL.revokeObjectURL(oldImage.url);
+      localImageUrls.current.delete(oldImage.url);
+    }
+    const url = URL.createObjectURL(file);
+    localImageUrls.current.add(url);
+    updateImage(index, { file, url });
     event.target.value = '';
   }
   function removeImage(index: number) {
     setImages((old) => {
+      if (old[index]?.file && localImageUrls.current.has(old[index].url)) {
+        URL.revokeObjectURL(old[index].url);
+        localImageUrls.current.delete(old[index].url);
+      }
       const next = old.filter((_, at) => at !== index).map((image, at) => ({ ...image, sortOrder: at }));
       if (old[index]?.isPrimary && next[0]) next[0] = { ...next[0], isPrimary: true };
       return next;
@@ -117,7 +147,10 @@ export function AdminPanel(props: AdminPanelProps) {
     setSaving(true);
     setFeedback('');
     try {
-      await onSaveProduct({ ...draft, slug: draft.slug || slugify(draft.name) }, normalizedImages, selectedId ?? undefined);
+      const savedProductId = await onSaveProduct({ ...draft, slug: draft.slug || slugify(draft.name) }, normalizedImages, selectedId ?? undefined);
+      clearLocalImagePreviews();
+      setImages([]);
+      setSelectedId(savedProductId);
       setFeedback('Listing saved successfully.');
       setEditing(false);
       onRefresh();
@@ -136,6 +169,7 @@ export function AdminPanel(props: AdminPanelProps) {
       setDeletePhrase('');
       setSelectedId(null);
       setDraft(blankDraft(categories.find((category) => category.active)?.id ?? ''));
+      clearLocalImagePreviews();
       setImages([]);
       setEditing(false);
       setFeedback('Listing deleted.');
@@ -167,14 +201,14 @@ export function AdminPanel(props: AdminPanelProps) {
       setSaving(false);
     }
   }
-  async function deactivateCategory() {
+  async function setCategoryStatus(active: boolean) {
     const target = categories.find((category) => category.id === categoryId);
     if (!target) return;
     setSaving(true);
     try {
-      await onDeactivateCategory(target.id);
+      await onSetCategoryActive(target.id, active);
       setModal(null);
-      setFeedback(`${target.name} has been deactivated.`);
+      setFeedback(active ? `${target.name} has been reactivated.` : `${target.name} has been deactivated.`);
       onRefresh();
     } catch (reason) {
       setFeedback(reason instanceof Error ? reason.message : 'Could not deactivate this category. Please try again.');
@@ -213,7 +247,8 @@ export function AdminPanel(props: AdminPanelProps) {
           <section className="admin-summary" aria-label="Catalogue summary">
             <div className="admin-stat"><div className="admin-stat-label">All listings</div><div className="admin-stat-value">{products.length}</div><div className="admin-stat-detail">Across active and archived</div></div>
             <div className="admin-stat"><div className="admin-stat-label">Public listings</div><div className="admin-stat-value">{activeCount}</div><div className="admin-stat-detail">Currently visible to customers</div></div>
-            <div className="admin-stat"><div className="admin-stat-label">Featured</div><div className="admin-stat-value">{featuredCount}</div><div className="admin-stat-detail">Highlighted in the catalogue</div></div>
+            <div className="admin-stat"><div className="admin-stat-label">Inactive</div><div className="admin-stat-value">{inactiveCount}</div><div className="admin-stat-detail">Hidden from the storefront</div></div>
+            <div className="admin-stat"><div className="admin-stat-label">Featured</div><div className="admin-stat-value">{featuredCount}</div><div className="admin-stat-detail">Prioritized in catalogue order</div></div>
           </section>
           <div className="admin-workspace">
             <section className="admin-panel-card" aria-labelledby="products-title">
@@ -221,14 +256,15 @@ export function AdminPanel(props: AdminPanelProps) {
               <div className="admin-list-tools">
                 <label className="admin-search-wrap"><Search size={14} aria-hidden="true" /><span className="admin-screen-reader">Search listings</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, brand, SKU…" data-testid="input-product-search" /></label>
                 <label><span className="admin-screen-reader">Filter listings</span><select className="admin-select-small" value={filter} onChange={(event) => setFilter(event.target.value)} data-testid="select-product-filter"><option value="all">All listings</option><option value="active">Public</option><option value="inactive">Inactive</option><option value="featured">Featured</option></select></label>
+                <label><span className="admin-screen-reader">Filter by category</span><select className="admin-select-small" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} data-testid="select-product-category-filter"><option value="all">All categories</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
               </div>
               <div className="admin-product-list" aria-live="polite">
                 {loading && products.length === 0 ? <>{[0, 1, 2, 3].map((item) => <div key={item} className="admin-skeleton admin-skeleton-row" />)}</>
                   : filteredProducts.length === 0 ? <div className="admin-filter-empty"><PackageOpen size={24} /><p>{products.length ? 'No listings match these filters.' : 'Your catalogue is ready for its first listing.'}</p>{!products.length && <button type="button" className="admin-button secondary" onClick={createProduct}>Add a listing</button>}</div>
                   : filteredProducts.map((product) => <div key={product.id} role="button" tabIndex={0} className={`admin-product-row ${selectedId === product.id && !editing ? 'selected' : ''}`} onClick={() => chooseProduct(product)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); chooseProduct(product); } }} data-testid={`row-product-${product.id}`}>
-                    <div className="admin-thumb">{product.images[0]?.url ? <img src={product.images[0].url} alt="" /> : <Smartphone size={19} />}</div>
+                    <div className="admin-thumb">{(product.images.find((image) => image.isPrimary) ?? product.images[0])?.url ? <img src={(product.images.find((image) => image.isPrimary) ?? product.images[0])?.url} alt="" /> : <Smartphone size={19} />}</div>
                     <div className="admin-product-meta"><strong>{product.name}</strong><span>{product.brand || 'No brand'} · {product.category} · {money(product.price)}</span></div>
-                    <div className="admin-row-status"><i className={`admin-status-dot ${product.active ? 'live' : ''}`} />{product.active ? 'Public' : 'Inactive'}{product.featured && <Star size={12} aria-label="Featured" />}</div>
+                    <div className="admin-row-status"><i className={`admin-status-dot ${product.active && categories.find((category) => category.id === product.categoryId)?.active ? 'live' : ''}`} />{product.active && categories.find((category) => category.id === product.categoryId)?.active ? 'Public' : 'Inactive'}{product.featured && <Star size={12} aria-label="Featured" />}</div>
                   </div>)}
               </div>
             </section>
@@ -274,7 +310,7 @@ export function AdminPanel(props: AdminPanelProps) {
                 <div className="admin-editor-footer"><button type="button" className="admin-button ghost" onClick={() => { setEditing(false); if (!selected) { setSelectedId(null); setImages([]); } else chooseProduct(selected); }}>Cancel</button><div className="admin-editor-footer-right"><button type="submit" className="admin-button primary" disabled={saving}>{saving ? 'Saving…' : <><Check size={14} /> Save listing</>}</button></div></div>
               </form> : selected ? <>
                 <div className="admin-editor-content">
-                  <div className="admin-editor-title"><div><h3>{selected.name}</h3><p>{selected.brand} · {selected.category}</p></div><span className="admin-count">{selected.active ? 'Public' : 'Inactive'}</span></div>
+                  <div className="admin-editor-title"><div><h3>{selected.name}</h3><p>{selected.brand} · {selected.category}</p></div><span className="admin-count">{selected.active && categories.find((category) => category.id === selected.categoryId)?.active ? 'Public' : 'Inactive'}</span></div>
                   <div className="admin-field-grid">
                     <div className="admin-stat"><div className="admin-stat-label">Current price</div><div className="admin-stat-value" style={{ fontSize: 16 }}>{money(selected.price)}</div></div>
                     <div className="admin-stat"><div className="admin-stat-label">Stock quantity</div><div className="admin-stat-value">{selected.stockQuantity}</div></div>
@@ -294,7 +330,9 @@ export function AdminPanel(props: AdminPanelProps) {
             <div className="admin-category-list">
               {categories.length === 0 ? <div className="admin-filter-empty">No categories to manage. Add one to start organizing listings.</div> : categories.slice().sort((a, b) => a.sortOrder - b.sortOrder).map((category) => <div className="admin-category-row" key={category.id} data-testid={`row-category-${category.id}`}>
                 <div><strong>{category.name}</strong><small>/{category.slug} · Order {category.sortOrder} · {category.active ? 'Active' : 'Inactive'}</small></div>
-                <div className="admin-category-actions"><button type="button" className="admin-icon-button" aria-label={`Edit ${category.name}`} onClick={() => openCategory(category)}><Pencil size={14} /></button>{category.active && <button type="button" className="admin-icon-button" aria-label={`Deactivate ${category.name}`} onClick={() => { setCategoryId(category.id); setModal('deactivate'); }}><Archive size={14} /></button>}</div>
+                 <div className="admin-category-actions"><button type="button" className="admin-icon-button" aria-label={`Edit ${category.name}`} onClick={() => openCategory(category)}><Pencil size={14} /></button>{category.active
+                   ? <button type="button" className="admin-icon-button" aria-label={`Deactivate ${category.name}`} onClick={() => { setCategoryId(category.id); setModal('deactivate'); }}><Archive size={14} /></button>
+                   : <button type="button" className="admin-button secondary" onClick={() => { setCategoryId(category.id); void setCategoryStatus(true); }}>Reactivate</button>}</div>
               </div>)}
             </div>
           </section>
@@ -321,8 +359,8 @@ export function AdminPanel(props: AdminPanelProps) {
       </div>}
       {modal === 'deactivate' && <div className="admin-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setModal(null); }}>
         <section className="admin-modal" role="dialog" aria-modal="true" aria-labelledby="deactivate-title">
-          <p className="admin-kicker">CATEGORY VISIBILITY</p><h2 id="deactivate-title">Deactivate category?</h2><p>{categories.find((category) => category.id === categoryId)?.name} will no longer be active for public browsing. Existing listings are not deleted.</p>
-          <div className="admin-modal-actions"><button type="button" className="admin-button secondary" onClick={() => setModal(null)} disabled={saving}>Keep active</button><button type="button" className="admin-button danger" onClick={deactivateCategory} disabled={saving}>{saving ? 'Updating…' : <><Archive size={14} /> Deactivate</>}</button></div>
+          <p className="admin-kicker">CATEGORY VISIBILITY</p><h2 id="deactivate-title">Deactivate category?</h2><p>{categories.find((category) => category.id === categoryId)?.name} will no longer be active for public browsing. Listings in it are not deleted, but will be hidden until the category is reactivated.</p>
+          <div className="admin-modal-actions"><button type="button" className="admin-button secondary" onClick={() => setModal(null)} disabled={saving}>Keep active</button><button type="button" className="admin-button danger" onClick={() => { void setCategoryStatus(false); }} disabled={saving}>{saving ? 'Updating…' : <><Archive size={14} /> Deactivate</>}</button></div>
         </section>
       </div>}
       {saving && <span className="admin-screen-reader" role="status">Saving changes</span>}

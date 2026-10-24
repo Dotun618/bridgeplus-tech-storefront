@@ -8,11 +8,11 @@ export type AdminPanelProps = {
   error: string;
   notice: string;
   onRefresh: () => void;
-  onSignOut: () => void;
-  onSaveProduct: (draft: ProductDraft, images: ImageDraft[], productId?: string) => Promise<void>;
+  onSignOut: () => Promise<void>;
+  onSaveProduct: (draft: ProductDraft, images: ImageDraft[], productId?: string) => Promise<string>;
   onDeleteProduct: (productId: string) => Promise<void>;
   onSaveCategory: (draft: CategoryDraft, categoryId?: string) => Promise<void>;
-  onDeactivateCategory: (categoryId: string) => Promise<void>;
+  onSetCategoryActive: (categoryId: string, active: boolean) => Promise<void>;
 };
 
 export type AdminSignInProps = {

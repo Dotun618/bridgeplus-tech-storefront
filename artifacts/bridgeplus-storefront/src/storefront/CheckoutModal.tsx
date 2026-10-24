@@ -22,6 +22,7 @@ export function CheckoutModal({ open, onClose, cart, subtotal }: CheckoutModalPr
   if (!open) return null;
   const itemCount = cart.reduce((sum, row) => sum + row.quantity, 0);
   const unpricedCount = cart.reduce((sum, row) => sum + (row.product.price === null ? row.quantity : 0), 0);
+  const hasDemoPrice = cart.some(({ product }) => product.demo && product.price !== null);
   const updateField = <K extends keyof CheckoutForm>(name: K, value: CheckoutForm[K]) => {
     setForm((old) => ({ ...old, [name]: value }));
     setErrors((old) => ({ ...old, [name]: '' }));
@@ -75,7 +76,7 @@ export function CheckoutModal({ open, onClose, cart, subtotal }: CheckoutModalPr
         <div className="checkout-order-preview">
           <div><span>{itemCount} item(s) · known-price subtotal</span><strong>{formatMoney(subtotal)}</strong></div>
           <div className="preview-total"><span>Provisional total, priced items only</span><strong>{formatMoney(subtotal)}</strong></div>
-          <p>{unpricedCount ? `${unpricedCount} unpriced item(s) excluded from subtotal. ` : ''}Demo prices are unverified. Delivery fee and final total are unconfirmed.</p>
+          <p>{unpricedCount ? `${unpricedCount} unpriced item(s) excluded from subtotal. ` : ''}{hasDemoPrice ? 'Demo prices are unverified. ' : 'Displayed prices still need confirmation. '}Delivery fee and final total are unconfirmed.</p>
         </div>
         <form className="checkout-form" onSubmit={prepareOrder} noValidate>
           <label>Full name <span className="required">*</span>

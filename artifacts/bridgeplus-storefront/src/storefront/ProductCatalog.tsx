@@ -1,6 +1,6 @@
 import {
   ArrowDownRight, ArrowRight, Camera, CircleHelp, Gamepad2, Headphones,
-  Laptop, Monitor, Plus, Search, Smartphone, Speaker, Tablet, Watch, X,
+  Laptop, Monitor, Plus, Search, ShoppingBag, Smartphone, Speaker, Tablet, Watch, X,
 } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import type { Product } from './products';
@@ -95,7 +95,7 @@ export function ProductCatalog({ search, setSearch, activeCategory, setActiveCat
 
     <section className="shop-section section-pad" id="shop" aria-labelledby="shop-title">
       <div className="section-heading shop-heading">
-        <div><p className="eyebrow">BRIDGEPLUS TECH CATALOGUE</p><h2 id="shop-title">Find your next device<span>.</span></h2><p>Browse examples, then ask BridgePlus to confirm details.</p></div>
+       <div><p className="eyebrow">BRIDGEPLUS TECH CATALOGUE</p><h2 id="shop-title">Find your next device<span>.</span></h2><p>Browse current listings, then ask BridgePlus to confirm details.</p></div>
         <label className="catalog-search"><Search size={17} aria-hidden="true" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search the catalogue" aria-label="Search catalogue" />{search && <button type="button" className="icon-button" onClick={() => setSearch('')} aria-label="Clear catalogue search"><X size={14} /></button>}</label>
       </div>
       <div className="filter-row">
@@ -119,7 +119,7 @@ export function ProductCatalog({ search, setSearch, activeCategory, setActiveCat
 }
 
 function ShoppingBagIcon() {
-  return <span className="empty-catalog-mark" aria-hidden="true"><ShoppingBag size={27} /></span>;
+  return <ShoppingBag size={27} aria-hidden="true" />;
 }
 
 export function ProductModal({ product, onClose, onAdd }: {
@@ -137,7 +137,7 @@ export function ProductModal({ product, onClose, onAdd }: {
         <h2 id="product-modal-title">{product.name}</h2>
         <p className="modal-price">{product.price === null ? 'Price to be confirmed' : formatMoney(product.price)}</p>
         <p>{product.description}</p>
-        <p className="demo-inline"><CircleHelp size={16} /> Unverified demo data. Confirm the exact model, price and availability with BridgePlus.</p>
+        <p className="demo-inline"><CircleHelp size={16} /> {product.demo ? 'Unverified demo data. ' : ''}Confirm the exact model, price and availability with BridgePlus.</p>
         <button type="button" className="primary-button full-button" onClick={add}>Add to bag <ArrowRight size={17} /></button>
       </div>
     </section>

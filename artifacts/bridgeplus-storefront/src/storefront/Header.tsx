@@ -16,10 +16,11 @@ type HeaderProps = {
   menuOpen: boolean;
   onToggleMenu: () => void;
   onCategory: (category: string) => void;
+  categories: string[];
 };
 
-export function Header({ cartCount, onOpenCart, search, setSearch, menuOpen, onToggleMenu, onCategory }: HeaderProps) {
-  const nav = ['Apple', 'Google Pixel', 'DJI', 'Meta', 'Headphones', 'Speakers', 'Smart-home devices', 'Gaming monitors', 'Gaming PCs & desktops', 'Accessories'];
+export function Header({ cartCount, onOpenCart, search, setSearch, menuOpen, onToggleMenu, onCategory, categories }: HeaderProps) {
+  const nav = categories;
   const choose = (category: string) => {
     onCategory(category);
     document.getElementById('shop')?.scrollIntoView({ behavior: 'smooth' });

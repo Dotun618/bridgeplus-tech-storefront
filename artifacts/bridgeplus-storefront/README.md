@@ -1,21 +1,64 @@
 # BridgePlus Tech storefront
 
-Responsive React storefront for BridgePlus customers. Browse the catalogue, add products to a local shopping bag, and prepare an order request for WhatsApp. No backend, order storage, inventory verification, or online payment is included.
+Responsive React + Vite storefront with Supabase-backed catalogue management. Customers browse published products, keep a local shopping bag, and prepare an order request for WhatsApp. This app does not accept payments, store customer orders, or confirm stock.
 
-## Before launch
+## Supabase setup
 
-The catalogue entries inherited from the supplied ZIP are explicitly marked as **unverified demo data**. Their names, listed prices, product details, and imagery should not be presented as confirmed stock or current prices. Confirm every listing and replace or remove demo records before publishing. The Smart-home devices category currently contains a clearly marked sample with no price.
+1. Create a Supabase project.
+2. In **SQL Editor**, run `supabase/migrations/202610230001_storefront_catalog.sql`. This creates categories, products, image metadata, administrator roles, row-level security policies, and a private `product-images` Storage bucket. The migration seeds the requested categories but does not add products.
+3. Create the first administrator from **Authentication → Users** using the dashboard’s invite/add-user action. Do not add a public registration flow. In project Auth settings, turn off public sign-ups if they are enabled.
+4. Copy that user’s Auth UID from the Users page. In SQL Editor, add only that chosen user to the protected admin allow-list:
 
-Delivery pricing is not configured as zero or free. The checkout presents the delivery fee as unconfirmed, and any delivery total is provisional. Confirm all fulfilment terms with BridgePlus.
+   ```sql
+   insert into public.admin_users (user_id)
+   values ('PASTE-THE-AUTH-USER-UUID-HERE')
+   on conflict (user_id) do nothing;
+   ```
 
-## Maintainer notes
+   The UUID is an Auth user ID, not an email address. Only a project owner should run this SQL. To remove administrator access, delete that user’s row from `public.admin_users`.
+5. Add these values to the Replit app’s environment (or Secrets). They are used by the browser client:
 
-- **Verified catalogue and prices:** edit `src/storefront/products.ts`. Keep `price: null` and a clear “Price to be confirmed” state until the price is verified. Set `demo: false` and update the badge only when a listing is confirmed. Product prices use NGN.
-- **Business identity and contact:** edit `src/storefront/config.ts`. The configured WhatsApp destination defaults to `+2349059325955` (stored as digits). Optionally override it with `VITE_WHATSAPP_NUMBER`. The supplied business name and tagline are the only company claims used in the UI.
-- **Brand assets:** the B+ wordmark in `src/storefront/Header.tsx` and `src/App.tsx` is the supplied implementation and current available mark. Update those two instances together if approved brand artwork becomes available.
-- **Category filters:** edit `categories` in `src/storefront/products.ts`. Categories without confirmed inventory may use a sample listing without a numeric price.
+   | Variable | Value |
+   | --- | --- |
+   | `VITE_SUPABASE_URL` | Supabase project URL |
+   | `VITE_SUPABASE_ANON_KEY` | Supabase publishable/anonymous key |
 
-## Order-request flow
+   The anonymous key is intentionally public and is safe for browser use only because the database and Storage RLS policies enforce access. Never put a `service_role` or secret key in a `VITE_` variable or frontend code. Restart/rebuild the storefront after changing environment values. If Replit has separate development and production environments, configure the public values for both.
+6. Open `/admin/login`, sign in with the invited administrator, and confirm the seeded categories appear. The public storefront starts with an empty catalogue until an administrator publishes products.
 
-Checkout validates customer name, phone and (for delivery) address, then creates a message for WhatsApp using `encodeURIComponent`. The customer reviews and sends the message themselves; clipboard fallback is also provided. Message generation or copying is not order confirmation or proof of payment. BridgePlus must confirm product availability, price, delivery/pickup details, and agree payment methods and instructions with the customer on WhatsApp. This storefront does not collect payment or retain order details.
+The SQL migration keeps the product image bucket private. Database rows store stable Storage paths, not expiring signed URLs; the app creates time-limited image URLs at read time. Keep the bucket private. Storage upload, update and deletion policies require an administrator, and visitors can request signed URLs only for images attached to published products in active categories.
 
+## Managing products and categories
+
+- Open **Administrator sign-in** in the storefront footer or visit `/admin/login`.
+- Add a product, choose a category, and enter verified product details. Prices may be left blank until confirmed. SKU, previous price, stock quantity, product icon, featured status and demo flag are editable.
+- Add one or more images from a phone or computer. Use **Set primary** to choose the storefront image; use **Replace** or **Remove** on each image. Save the listing to upload changes.
+- Keep a product unpublished while checking its information. Turn on **Public listing** only when BridgePlus is ready to display it. A product in an inactive category remains hidden from public browsing.
+- Use the category manager to add or edit categories, change their sort order, deactivate them, or reactivate them. Deactivating a category hides its products from the storefront without deleting those products.
+- To try a sample row in a development project, run `supabase/seed-demo.sql`. It inserts one clearly flagged demo listing with no price and zero stock. Do not run this optional seed in production.
+
+With only the main migration applied, test the empty state by visiting the storefront: it should show categories and “No products published yet.” For a populated-state test, run the optional demo seed and reload the storefront; the one demo listing should be marked as unverified and show no price. Delete that sample listing in `/admin` when done.
+
+## Security and configuration
+
+- Supabase Auth session is checked against `public.is_store_admin()` before the admin dashboard opens. Authenticated users without a row in `public.admin_users` are signed out and cannot manage products or images.
+- Public catalogue queries read active products and active categories only. Admin mutations are also enforced by RLS and Storage policies, not just by hiding the admin interface.
+- The initial administrator and any later administrator changes are managed in Supabase—not through a public sign-up page.
+- The product table stores a stock quantity for operator reference; the storefront does not present it as confirmed availability. BridgePlus must confirm availability, final pricing, and fulfilment.
+
+## Business details and branding
+
+- WhatsApp destination and support contact: `src/storefront/config.ts`. Current WhatsApp number: `+234 905 932 5955` (digits in configuration: `2349059325955`). It can also be overridden with `VITE_WHATSAPP_NUMBER`.
+- Business display name and tagline: same configuration file.
+- The B+ mark is currently implemented in the storefront header/footer and admin sign-in/dashboard. Replace those text marks together if approved logo artwork is added.
+- Category records are managed from `/admin`; the initial category set is inserted by the migration.
+
+## WhatsApp order requests
+
+Checkout validates the customer’s name and phone, plus a delivery address for home delivery. It creates a URL-encoded WhatsApp message with the selected items and displayed estimate, and offers a copy fallback. The customer must review and send the message. Generating or copying a message is not proof it was sent, received, accepted, or paid. Payment methods, product availability, final prices, delivery fees and pickup arrangements must be confirmed with BridgePlus on WhatsApp.
+
+## Replit commands
+
+- `pnpm --filter @workspace/bridgeplus-storefront run dev` — start the storefront preview.
+- `pnpm --filter @workspace/bridgeplus-storefront run typecheck` — check storefront TypeScript.
+- `pnpm --filter @workspace/bridgeplus-storefront run build` — production frontend build (the Replit workflow supplies `PORT` and `BASE_PATH`).

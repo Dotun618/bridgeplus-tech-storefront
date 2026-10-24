@@ -45,8 +45,9 @@ export function buildOrderMessage(args: {
   subtotal: number;
 }) {
   const { orderRef, form, cart, subtotal } = args;
+  const hasDemoPrice = cart.some(({ product }) => product.demo && product.price !== null);
   const itemLines = cart.map(({ product, quantity }) =>
-    `- ${product.name} (${product.brand}) x${quantity} — ${product.price === null ? 'Price to be confirmed' : `${formatMoney(product.price * quantity)} (unverified demo price)`}`,
+    `- ${product.name} (${product.brand}) x${quantity} — ${product.price === null ? 'Price to be confirmed' : `${formatMoney(product.price * quantity)}${product.demo ? ' (unverified demo price)' : ''}`}`,
   );
   return [
     `Hello ${businessConfig.businessName}, I would like to make an order request.`,
@@ -57,7 +58,7 @@ export function buildOrderMessage(args: {
     'ITEMS',
     ...itemLines,
     '',
-    `Known-price subtotal: ${formatMoney(subtotal)} (unverified demo prices; excludes any unpriced items)`,
+    `Known-price subtotal: ${formatMoney(subtotal)} (${hasDemoPrice ? 'includes unverified demo prices; ' : 'displayed catalogue prices; '}excludes any unpriced items)`,
     `Delivery fee: ${form.fulfilment === 'delivery' ? 'Unconfirmed' : 'Pickup selected; arrangements to be confirmed'}`,
     `Provisional total: ${formatMoney(subtotal)}${form.fulfilment === 'delivery' ? ' + unconfirmed delivery charge' : ' before BridgePlus price/availability confirmation'}`,
     '',
