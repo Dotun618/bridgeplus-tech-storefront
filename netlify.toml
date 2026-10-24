@@ -1,3 +1,7 @@
 [build]
   command = "npm run build"
   publish = "artifacts/bridgeplus-storefront/dist/public"
+
+[build.environment]
+  PORT = "3000"
+  BASE_PATH = "/"
