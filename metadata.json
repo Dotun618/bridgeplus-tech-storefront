@@ -1,0 +1,7 @@
+{
+  "name": "BridgePlus Tech Storefront",
+  "description": "Smart devices and tech storefront catalogue for BridgePlus Tech with WhatsApp ordering.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

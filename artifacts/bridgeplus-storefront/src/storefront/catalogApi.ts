@@ -8,7 +8,7 @@ import type {
   ProductDraft,
   ProductImage,
 } from './catalogTypes';
-import { requireSupabase } from './supabase';
+import { isSupabaseConfigured, requireSupabase } from './supabase';
 
 const IMAGE_BUCKET = 'product-images';
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -142,30 +142,267 @@ async function readImages(productIds: string[]) {
   return (data ?? []) as ImageRow[];
 }
 
-export async function fetchPublicCatalog(): Promise<AdminCatalog> {
-  const client = requireSupabase();
-  const [categoryResult, productResult] = await Promise.all([
-    client.from('categories')
-      .select('id,name,slug,active,sort_order')
-      .eq('active', true)
-      .order('sort_order')
-      .order('name'),
-    client.from('products')
-      .select('id,name,slug,brand,description,category_id,price,previous_price,sku,stock_quantity,active,featured,is_demo,icon,created_at')
-      .eq('active', true)
-      .order('featured', { ascending: false })
-      .order('created_at', { ascending: false }),
-  ]);
-  throwIfError(categoryResult.error);
-  throwIfError(productResult.error);
+const fallbackDemoCategories: Category[] = [
+  'Apple',
+  'Google Pixel',
+  'DJI',
+  'Meta',
+  'Headphones',
+  'Speakers',
+  'Smart-home devices',
+  'Gaming monitors',
+  'Gaming PCs & desktops',
+  'Accessories',
+].map((name, index) => ({
+  id: `cat-${slugify(name)}`,
+  name,
+  slug: slugify(name),
+  active: true,
+  sortOrder: (index + 1) * 10,
+}));
 
-  const categories = (categoryResult.data ?? []) as CategoryRow[];
-  const products = (productResult.data ?? []) as ProductRow[];
-  const images = await readImages(products.map((product) => product.id));
-  return {
-    categories: categories.map(toCategory),
-    products: await mapProducts(products, categories, images),
-  };
+const fallbackDemoProducts: CatalogProduct[] = [
+  {
+    id: 'demo-iphone-16-pro',
+    name: 'Apple iPhone 16 Pro Max 256GB',
+    brand: 'Apple',
+    category: 'Apple',
+    categoryId: 'cat-apple',
+    price: 2150000,
+    previousPrice: 2300000,
+    description: 'Brand new sealed iPhone 16 Pro Max with A18 Pro chip, titanium design and 48MP camera system.',
+    badge: 'Featured listing',
+    demo: true,
+    icon: 'phone',
+    images: [],
+    slug: 'apple-iphone-16-pro-max-256gb',
+    sku: 'APP-IP16PM-256',
+    stockQuantity: 5,
+    active: true,
+    featured: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo-pixel-9-pro',
+    name: 'Google Pixel 9 Pro XL 128GB',
+    brand: 'Google Pixel',
+    category: 'Google Pixel',
+    categoryId: 'cat-google-pixel',
+    price: 1650000,
+    previousPrice: 1800000,
+    description: 'Flagship Google Tensor G4 smartphone with pro camera controls, Gemini AI integrations and Super Actua OLED display.',
+    badge: 'Featured listing',
+    demo: true,
+    icon: 'phone',
+    images: [],
+    slug: 'google-pixel-9-pro-xl-128gb',
+    sku: 'GOOG-PX9P-128',
+    stockQuantity: 4,
+    active: true,
+    featured: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo-dji-mini-4',
+    name: 'DJI Mini 4 Pro Fly More Combo Plus',
+    brand: 'DJI',
+    category: 'DJI',
+    categoryId: 'cat-dji',
+    price: 1550000,
+    previousPrice: null,
+    description: 'Under 249g ultra-light camera drone with omnidirectional obstacle sensing, 4K/60fps HDR video and extended flight batteries.',
+    badge: 'Popular',
+    demo: true,
+    icon: 'camera',
+    images: [],
+    slug: 'dji-mini-4-pro-fly-more-combo',
+    sku: 'DJI-M4P-FMC',
+    stockQuantity: 3,
+    active: true,
+    featured: false,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo-meta-quest-3s',
+    name: 'Meta Quest 3S 128GB All-in-One VR Headset',
+    brand: 'Meta',
+    category: 'Meta',
+    categoryId: 'cat-meta',
+    price: 620000,
+    previousPrice: 680000,
+    description: 'Next-generation mixed reality headset with high-resolution full-colour passthrough and Touch Plus controllers.',
+    badge: 'Popular',
+    demo: true,
+    icon: 'smart',
+    images: [],
+    slug: 'meta-quest-3s-128gb',
+    sku: 'META-Q3S-128',
+    stockQuantity: 6,
+    active: true,
+    featured: false,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo-sony-wh1000xm5',
+    name: 'Sony WH-1000XM5 Wireless Noise Cancelling Headphones',
+    brand: 'Sony',
+    category: 'Headphones',
+    categoryId: 'cat-headphones',
+    price: 520000,
+    previousPrice: 580000,
+    description: 'Industry-leading noise cancellation with Auto NC Optimizer, 30-hour battery life and crystal-clear hands-free calling.',
+    badge: 'Top Audio',
+    demo: true,
+    icon: 'headphones',
+    images: [],
+    slug: 'sony-wh1000xm5-wireless-headphones',
+    sku: 'SNY-WH5-BLK',
+    stockQuantity: 8,
+    active: true,
+    featured: false,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo-marshall-emberton',
+    name: 'Marshall Emberton II Portable Bluetooth Speaker',
+    brand: 'Marshall',
+    category: 'Speakers',
+    categoryId: 'cat-speakers',
+    price: 285000,
+    previousPrice: null,
+    description: 'Compact portable speaker with signature 360° True Stereophonic sound, IP67 dust/water resistance and 30+ hours playtime.',
+    badge: 'Top Audio',
+    demo: true,
+    icon: 'speaker',
+    images: [],
+    slug: 'marshall-emberton-ii-speaker',
+    sku: 'MSH-EMB2-BLK',
+    stockQuantity: 7,
+    active: true,
+    featured: false,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo-lg-ultragear-oled',
+    name: 'LG UltraGear 27" 240Hz QHD OLED Gaming Monitor',
+    brand: 'LG',
+    category: 'Gaming monitors',
+    categoryId: 'cat-gaming-monitors',
+    price: 1350000,
+    previousPrice: 1450000,
+    description: '0.03ms response time, 240Hz refresh rate, G-Sync Compatible & FreeSync Premium Pro with true blacks and 98.5% DCI-P3.',
+    badge: 'Gaming',
+    demo: true,
+    icon: 'monitor',
+    images: [],
+    slug: 'lg-ultragear-27-oled-240hz',
+    sku: 'LG-27GR95QE',
+    stockQuantity: 2,
+    active: true,
+    featured: false,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo-gaming-pc-rtx4070',
+    name: 'BridgePlus Custom Elite Gaming Desktop (Ryzen 7 7800X3D / RTX 4070 Super)',
+    brand: 'BridgePlus Custom',
+    category: 'Gaming PCs & desktops',
+    categoryId: 'cat-gaming-pcs-desktops',
+    price: 3200000,
+    previousPrice: null,
+    description: 'High-performance gaming & creator rig: AMD Ryzen 7 7800X3D, GeForce RTX 4070 Super 12GB, 32GB DDR5 6000MHz, 2TB Gen4 NVMe, 360mm AIO liquid cooling.',
+    badge: 'High Performance',
+    demo: true,
+    icon: 'desktop',
+    images: [],
+    slug: 'bridgeplus-custom-gaming-desktop-rtx4070',
+    sku: 'BPC-R7-4070S',
+    stockQuantity: 2,
+    active: true,
+    featured: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo-apple-watch-ultra',
+    name: 'Apple Watch Ultra 2 GPS + Cellular 49mm',
+    brand: 'Apple',
+    category: 'Apple',
+    categoryId: 'cat-apple',
+    price: 1250000,
+    previousPrice: null,
+    description: 'Rugged titanium case with precision dual-frequency GPS, up to 72 hours battery life in low power mode, and bright 3000 nit display.',
+    badge: 'Featured listing',
+    demo: true,
+    icon: 'watch',
+    images: [],
+    slug: 'apple-watch-ultra-2-49mm',
+    sku: 'APP-WU2-49TI',
+    stockQuantity: 4,
+    active: true,
+    featured: false,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo-anker-737-powerbank',
+    name: 'Anker 737 Power Bank (PowerCore 24K) 140W',
+    brand: 'Anker',
+    category: 'Accessories',
+    categoryId: 'cat-accessories',
+    price: 195000,
+    previousPrice: 220000,
+    description: 'Ultra-powerful two-way charging with Power Delivery 3.1 and smart digital display showing output power and remaining recharge time.',
+    badge: 'Popular',
+    demo: true,
+    icon: 'smart',
+    images: [],
+    slug: 'anker-737-powerbank-140w',
+    sku: 'ANK-737-24K',
+    stockQuantity: 12,
+    active: true,
+    featured: false,
+    createdAt: new Date().toISOString(),
+  },
+];
+
+export async function fetchPublicCatalog(): Promise<AdminCatalog> {
+  if (!isSupabaseConfigured) {
+    return {
+      categories: fallbackDemoCategories,
+      products: fallbackDemoProducts,
+    };
+  }
+
+  try {
+    const client = requireSupabase();
+    const [categoryResult, productResult] = await Promise.all([
+      client.from('categories')
+        .select('id,name,slug,active,sort_order')
+        .eq('active', true)
+        .order('sort_order')
+        .order('name'),
+      client.from('products')
+        .select('id,name,slug,brand,description,category_id,price,previous_price,sku,stock_quantity,active,featured,is_demo,icon,created_at')
+        .eq('active', true)
+        .order('featured', { ascending: false })
+        .order('created_at', { ascending: false }),
+    ]);
+    throwIfError(categoryResult.error);
+    throwIfError(productResult.error);
+
+    const categories = (categoryResult.data ?? []) as CategoryRow[];
+    const products = (productResult.data ?? []) as ProductRow[];
+    const images = await readImages(products.map((product) => product.id));
+    return {
+      categories: categories.map(toCategory),
+      products: await mapProducts(products, categories, images),
+    };
+  } catch (err) {
+    console.warn('[AI Studio] Supabase fetch failed, displaying demo catalog:', err);
+    return {
+      categories: fallbackDemoCategories,
+      products: fallbackDemoProducts,
+    };
+  }
 }
 
 export async function fetchAdminCatalog(): Promise<AdminCatalog> {

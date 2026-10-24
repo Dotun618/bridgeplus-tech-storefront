@@ -17,9 +17,10 @@ export const supabase = isSupabaseConfigured
 
 export function requireSupabase() {
   if (!supabase) {
-    throw new Error(
-      'Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Replit Secrets or environment variables, then restart the storefront.',
+    console.error(
+      'Supabase is not configured. Missing VITE_SUPABASE_URL and/or VITE_SUPABASE_ANON_KEY in environment variables.',
     );
+    throw new Error('Catalogue temporarily unavailable. Please try again shortly.');
   }
   return supabase;
 }

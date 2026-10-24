@@ -16,14 +16,14 @@ Responsive React + Vite storefront with Supabase-backed catalogue management. Cu
    ```
 
    The UUID is an Auth user ID, not an email address. Only a project owner should run this SQL. To remove administrator access, delete that user’s row from `public.admin_users`.
-5. Add these values to the Replit app’s environment (or Secrets). They are used by the browser client:
+5. Add these values to the app’s environment variables. They are used by the browser client:
 
    | Variable | Value |
    | --- | --- |
    | `VITE_SUPABASE_URL` | Supabase project URL |
    | `VITE_SUPABASE_ANON_KEY` | Supabase publishable/anonymous key |
 
-   The anonymous key is intentionally public and is safe for browser use only because the database and Storage RLS policies enforce access. Never put a `service_role` or secret key in a `VITE_` variable or frontend code. Restart/rebuild the storefront after changing environment values. If Replit has separate development and production environments, configure the public values for both.
+   The anonymous key is intentionally public and is safe for browser use only because the database and Storage RLS policies enforce access. Never put a `service_role` or secret key in a `VITE_` variable or frontend code. Restart/rebuild the storefront after changing environment values.
 6. Open `/admin/login`, sign in with the invited administrator, and confirm the seeded categories appear. The public storefront starts with an empty catalogue until an administrator publishes products.
 
 The SQL migration keeps the product image bucket private. Database rows store stable Storage paths, not expiring signed URLs; the app creates time-limited image URLs at read time. Keep the bucket private. Storage upload, update and deletion policies require an administrator, and visitors can request signed URLs only for images attached to published products in active categories.
@@ -57,8 +57,8 @@ With only the main migration applied, test the empty state by visiting the store
 
 Checkout validates the customer’s name and phone, plus a delivery address for home delivery. It creates a URL-encoded WhatsApp message with the selected items and displayed estimate, and offers a copy fallback. The customer must review and send the message. Generating or copying a message is not proof it was sent, received, accepted, or paid. Payment methods, product availability, final prices, delivery fees and pickup arrangements must be confirmed with BridgePlus on WhatsApp.
 
-## Replit commands
-
-- `pnpm --filter @workspace/bridgeplus-storefront run dev` — start the storefront preview.
-- `pnpm --filter @workspace/bridgeplus-storefront run typecheck` — check storefront TypeScript.
-- `pnpm --filter @workspace/bridgeplus-storefront run build` — production frontend build (the Replit workflow supplies `PORT` and `BASE_PATH`).
+## Development and build commands
+ 
+- `npm run dev` — start the storefront preview dev server.
+- `npm run typecheck` — check TypeScript types across the app.
+- `npm run build` — production frontend build.
